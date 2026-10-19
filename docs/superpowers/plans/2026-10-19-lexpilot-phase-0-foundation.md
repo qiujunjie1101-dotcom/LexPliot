@@ -1,5 +1,7 @@
 # LexPilot Phase 0 — Foundation & Authentication Implementation Plan
 
+> **中文导读**：[`2026-10-19-lexpilot-phase-0-foundation-zh.md`](2026-10-19-lexpilot-phase-0-foundation-zh.md)
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver the Phase 0 vertical slice: runnable FastAPI + PostgreSQL + Redis stack, JWT authentication with refresh rotation, multi-tenant RBAC/ACL, admin user management with idempotency, a Vue 3 login/dashboard, and CI.
