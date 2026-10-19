@@ -4,6 +4,7 @@
 - 设计规格：`docs/superpowers/specs/2026-10-19-contract-review-agent-design.md`
 - 日期：2026-10-19
 - 范围：Phase 0（基础架构、认证、租户/RBAC、管理员用户、前端登录、CI）
+- 实施状态（2026-10-20）：Task 1 已完成；实际采用 `app/modules/auth` 模块化布局；本地 PostgreSQL/Redis 映射为 `55432`/`56379`（避免与宿主机已有服务冲突）。
 
 > 代码块仍是 Python / TypeScript / YAML，属于通用实现语言；本导读用中文解释每个任务“做什么、改哪些文件、怎么验证、代码在英文计划哪一段”。
 
@@ -34,7 +35,8 @@ Phase 0 只做**可运行的基础纵向切片**：
 | Python | 3.12，用 `uv` 管理依赖与虚拟环境 |
 | 后端 | FastAPI + 同步 SQLAlchemy 2.0（Phase 0 降低异步复杂度） |
 | 数据库 | PostgreSQL 16 + pgvector 镜像；初始迁移先创建 `vector` / `btree_gist` 扩展 |
-| Redis | 登录失败限流（5 次 / 15 分钟） |
+| Redis | 登录失败限流（5 次 / 15 分钟）；本地宿主端口 `56379` 映射容器 `6379` |
+| 本地 PostgreSQL | 宿主端口 `55432` 映射容器 `5432`，避免与已有本地 PostgreSQL 冲突 |
 | 认证 | Access JWT 15 分钟；Refresh Token 7 天并轮换 |
 | Token 存放 | Refresh Token 放 `HttpOnly` Cookie（`lexpilot_refresh`，路径 `/api/v1/auth`）；Access Token 只放前端内存 |
 | JWT | HS256，支持 `kid` 密钥轮换 |

@@ -2,6 +2,8 @@
 
 > **中文导读**：[`2026-10-19-lexpilot-phase-0-foundation-zh.md`](2026-10-19-lexpilot-phase-0-foundation-zh.md)
 >
+> **2026-10-20 实施更新**：Phase 0 已采用 `app/modules/auth` 模块化布局；本地 PostgreSQL/Redis 映射到 `55432`/`56379`。本文件中 v1 的 `app/api|services|db` 路径仅作历史参考，实际以中文导读和代码为准；Task 2 起执行前会同步更新路径。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver the Phase 0 vertical slice: runnable FastAPI + PostgreSQL + Redis stack, JWT authentication with refresh rotation, multi-tenant RBAC/ACL, admin user management with idempotency, a Vue 3 login/dashboard, and CI.
