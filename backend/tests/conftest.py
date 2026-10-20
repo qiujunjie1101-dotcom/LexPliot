@@ -12,6 +12,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault("COOKIE_SECURE", "false")
 
+import fakeredis
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
@@ -23,6 +24,7 @@ from alembic import command
 from app.core.security import hash_password
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.session import SessionLocal, engine
+from app.infrastructure.redis.client import get_redis
 from app.main import app
 from app.modules.auth.models import RoleBinding, Tenant, User
 
@@ -52,9 +54,16 @@ def db() -> Session:
 
 
 @pytest.fixture()
-def client():
+def redis_client():
+    return fakeredis.FakeRedis(decode_responses=True)
+
+
+@pytest.fixture()
+def client(redis_client):
+    app.dependency_overrides[get_redis] = lambda: redis_client
     with TestClient(app) as test_client:
         yield test_client
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture()

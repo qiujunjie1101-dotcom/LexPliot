@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
@@ -19,6 +20,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.auth.models import Tenant, User
+from app.modules.auth.rate_limit import LoginRateLimiter
 from app.modules.auth.repository import (
     RefreshTokenRepository,
     TenantRepository,
@@ -45,11 +47,13 @@ class AuthService:
         users: UserRepository,
         tenants: TenantRepository,
         refresh_tokens: RefreshTokenRepository,
+        rate_limiter: LoginRateLimiter | None = None,
     ) -> None:
         self.session = session
         self.users = users
         self.tenants = tenants
         self.refresh_tokens = refresh_tokens
+        self.rate_limiter = rate_limiter
 
     def authenticate(
         self,
@@ -57,34 +61,43 @@ class AuthService:
         email: str,
         password: str,
         tenant_slug: str | None = None,
+        client_ip: str | None = None,
     ) -> AuthResult:
-        user = self.users.get_by_email(email)
-        if user is None or not user.is_active:
-            raise InvalidCredentials()
-        if not verify_password(password, user.password_hash):
-            raise InvalidCredentials()
+        if self.rate_limiter is not None and client_ip is not None:
+            self.rate_limiter.check(client_ip, email)
 
-        memberships = self.users.list_memberships(user.id)
-        if not memberships:
-            raise MembershipNotFound()
+        try:
+            user = self.users.get_by_email(email)
+            if user is None or not user.is_active:
+                raise InvalidCredentials()
+            if not verify_password(password, user.password_hash):
+                raise InvalidCredentials()
 
-        if tenant_slug:
-            matching = [
-                (binding, tenant)
-                for binding, tenant in memberships
-                if tenant.slug == tenant_slug
-            ]
-            if not matching:
+            memberships = self.users.list_memberships(user.id)
+            if not memberships:
                 raise MembershipNotFound()
-        elif len(memberships) > 1:
-            raise TenantSelectionRequired(
-                [
-                    {"slug": tenant.slug, "name": tenant.name}
-                    for _, tenant in memberships
+
+            if tenant_slug:
+                matching = [
+                    (binding, tenant)
+                    for binding, tenant in memberships
+                    if tenant.slug == tenant_slug
                 ]
-            )
-        else:
-            matching = memberships
+                if not matching:
+                    raise MembershipNotFound()
+            elif len(memberships) > 1:
+                raise TenantSelectionRequired(
+                    [
+                        {"slug": tenant.slug, "name": tenant.name}
+                        for _, tenant in memberships
+                    ]
+                )
+            else:
+                matching = memberships
+        except (InvalidCredentials, MembershipNotFound):
+            if self.rate_limiter is not None and client_ip is not None:
+                self.rate_limiter.record_failure(client_ip, email)
+            raise
 
         _, tenant = matching[0]
         roles = self.users.list_roles(user.id, tenant.id)
@@ -100,6 +113,9 @@ class AuthService:
         except Exception:
             self.session.rollback()
             raise
+
+        if self.rate_limiter is not None and client_ip is not None:
+            self.rate_limiter.reset(client_ip, email)
 
         return AuthResult(
             access_token=access_token,
@@ -163,7 +179,77 @@ class AuthService:
         self.refresh_tokens.revoke(token, datetime.now(UTC))
         self.session.commit()
 
-    def _create_refresh_token(self, user_id, tenant_id) -> str:
+    def refresh(self, raw_token: str) -> AuthResult:
+        new_raw_token, user, tenant = self.rotate_refresh_token(raw_token)
+        roles = self.users.list_roles(user.id, tenant.id)
+        access_token = create_access_token(
+            user_id=user.id,
+            tenant_id=tenant.id,
+            roles=roles,
+        )
+        return AuthResult(
+            access_token=access_token,
+            refresh_token=new_raw_token,
+            user=user,
+            tenant=tenant,
+            roles=roles,
+        )
+
+    def switch_tenant(self, raw_token: str, tenant_slug: str) -> AuthResult:
+        now = datetime.now(UTC)
+        token = self.refresh_tokens.find_by_hash_for_update(
+            hash_refresh_token(raw_token)
+        )
+        if token is None or token.expires_at <= now or token.revoked_at is not None:
+            self.session.rollback()
+            raise RefreshTokenInvalid()
+
+        user = self.users.get_by_id(token.user_id)
+        if user is None or not user.is_active:
+            self.session.rollback()
+            raise RefreshTokenInvalid()
+
+        memberships = self.users.list_memberships(user.id)
+        matching = [
+            (binding, tenant)
+            for binding, tenant in memberships
+            if tenant.slug == tenant_slug
+        ]
+        if not matching:
+            self.session.rollback()
+            raise MembershipNotFound()
+
+        _, tenant = matching[0]
+        roles = self.users.list_roles(user.id, tenant.id)
+        new_raw_token = generate_refresh_token()
+        try:
+            self.refresh_tokens.revoke(token, now)
+            self.refresh_tokens.create(
+                user_id=user.id,
+                tenant_id=tenant.id,
+                token_hash=hash_refresh_token(new_raw_token),
+                family_id=uuid7(),
+                expires_at=now + timedelta(days=get_settings().refresh_token_days),
+            )
+            access_token = create_access_token(
+                user_id=user.id,
+                tenant_id=tenant.id,
+                roles=roles,
+            )
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+        return AuthResult(
+            access_token=access_token,
+            refresh_token=new_raw_token,
+            user=user,
+            tenant=tenant,
+            roles=roles,
+        )
+
+    def _create_refresh_token(self, user_id: UUID, tenant_id: UUID) -> str:
         raw_token = generate_refresh_token()
         self.refresh_tokens.create(
             user_id=user_id,
