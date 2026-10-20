@@ -9,13 +9,17 @@
 
 ## 当前状态
 
-Phase 0 认证闭环已完成：
+**Phase 0 已完成**：
 
 - FastAPI + PostgreSQL + Redis
 - JWT 登录、Refresh Token 轮换、登出、`/me`
 - RBAC + ACL、管理员用户管理、幂等创建
 - Vue 3 登录页与工作台
 - Alembic 初始迁移、测试与 Seed CLI
+- Playwright 登录 E2E
+- GitHub Actions：backend / frontend / e2e 三个 job
+
+下一步进入 Phase 1：合同上传、版本管理、PDF/DOCX 解析、OCR、条款结构与异步任务。
 
 ## 本地启动
 
@@ -69,7 +73,10 @@ cd ../frontend
 npm run lint
 npm run test:unit
 npm run build
+npm run test:e2e
 ```
+
+> E2E 使用 4173 端口和真实后端，不会占用开发端口 5175。
 
 ## 设计边界
 
