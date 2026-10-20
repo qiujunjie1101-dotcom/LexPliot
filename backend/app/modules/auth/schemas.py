@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -38,3 +39,17 @@ class MeResponse(BaseModel):
 
 class SwitchTenantRequest(BaseModel):
     tenant_slug: str
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=256)
+    display_name: str = Field(min_length=1, max_length=255)
+    role: Literal["admin", "legal_reviewer", "business_submitter"]
+
+
+class AdminUserRead(BaseModel):
+    id: UUID
+    email: EmailStr
+    display_name: str
+    roles: list[str]

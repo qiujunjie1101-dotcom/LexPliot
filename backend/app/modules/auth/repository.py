@@ -1,10 +1,16 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
-from app.modules.auth.models import RefreshToken, RoleBinding, Tenant, User
+from app.modules.auth.models import (
+    RefreshToken,
+    ResourceAcl,
+    RoleBinding,
+    Tenant,
+    User,
+)
 
 
 class TenantRepository:
@@ -16,6 +22,12 @@ class TenantRepository:
 
     def get_by_slug(self, slug: str) -> Tenant | None:
         return self.session.scalar(select(Tenant).where(Tenant.slug == slug))
+
+    def create(self, *, slug: str, name: str) -> Tenant:
+        tenant = Tenant(slug=slug, name=name)
+        self.session.add(tenant)
+        self.session.flush()
+        return tenant
 
 
 class UserRepository:
@@ -46,6 +58,110 @@ class UserRepository:
                 )
             ).all()
         )
+
+    def create_user(
+        self,
+        *,
+        email: str,
+        password_hash: str,
+        display_name: str,
+    ) -> User:
+        user = User(
+            email=email.strip().lower(),
+            password_hash=password_hash,
+            display_name=display_name,
+        )
+        self.session.add(user)
+        self.session.flush()
+        return user
+
+    def get_role_binding(
+        self, tenant_id: UUID, user_id: UUID, role: str
+    ) -> RoleBinding | None:
+        return self.session.scalar(
+            select(RoleBinding).where(
+                RoleBinding.tenant_id == tenant_id,
+                RoleBinding.user_id == user_id,
+                RoleBinding.role == role,
+            )
+        )
+
+    def add_role_binding(
+        self, tenant_id: UUID, user_id: UUID, role: str
+    ) -> RoleBinding:
+        binding = RoleBinding(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role=role,
+        )
+        self.session.add(binding)
+        self.session.flush()
+        return binding
+
+    def list_tenant_users(self, tenant_id: UUID) -> list[User]:
+        return list(
+            self.session.scalars(
+                select(User)
+                .join(RoleBinding, RoleBinding.user_id == User.id)
+                .where(RoleBinding.tenant_id == tenant_id)
+                .order_by(User.email)
+                .distinct()
+            ).all()
+        )
+
+
+class AclRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def list_for_actor_resource(
+        self,
+        *,
+        tenant_id: UUID,
+        resource_type: str,
+        resource_id: UUID,
+        user_id: UUID,
+        roles: frozenset[str],
+    ) -> list[ResourceAcl]:
+        return list(
+            self.session.scalars(
+                select(ResourceAcl).where(
+                    ResourceAcl.tenant_id == tenant_id,
+                    ResourceAcl.resource_type == resource_type,
+                    ResourceAcl.resource_id == resource_id,
+                    or_(
+                        (ResourceAcl.subject_type == "user")
+                        & (ResourceAcl.user_id == user_id),
+                        (ResourceAcl.subject_type == "role")
+                        & (ResourceAcl.role.in_(list(roles))),
+                    ),
+                )
+            ).all()
+        )
+
+    def add(
+        self,
+        *,
+        tenant_id: UUID,
+        resource_type: str,
+        resource_id: UUID,
+        subject_type: str,
+        user_id: UUID | None,
+        role: str | None,
+        permission: str,
+    ) -> ResourceAcl:
+        entry = ResourceAcl(
+            tenant_id=tenant_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            subject_type=subject_type,
+            user_id=user_id,
+            role=role,
+            permission=permission,
+        )
+        self.session.add(entry)
+        self.session.flush()
+        return entry
 
 
 class RefreshTokenRepository:

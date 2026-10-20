@@ -86,6 +86,38 @@ class RateLimited(AppError):
         )
 
 
+class IdempotencyConflict(AppError):
+    code = "IDEMPOTENCY_CONFLICT"
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__("Idempotency-Key 已用于不同请求")
+
+
+class UserAlreadyExists(AppError):
+    code = "USER_ALREADY_EXISTS"
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__("用户已存在该租户角色")
+
+
+class TenantAlreadyExists(AppError):
+    code = "TENANT_ALREADY_EXISTS"
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__("租户已存在")
+
+
+class TenantNotFound(AppError):
+    code = "TENANT_NOT_FOUND"
+    status_code = 404
+
+    def __init__(self) -> None:
+        super().__init__("租户不存在")
+
+
 def install_exception_handlers(app: FastAPI) -> None:
     """把领域异常与参数校验异常统一转换为项目错误格式。"""
 

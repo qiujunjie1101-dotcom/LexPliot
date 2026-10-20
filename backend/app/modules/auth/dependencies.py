@@ -10,14 +10,18 @@ from app.core.config import get_settings
 from app.core.exceptions import PermissionDenied, Unauthenticated
 from app.core.security import decode_access_token
 from app.infrastructure.db.session import get_db
+from app.infrastructure.idempotency import IdempotencyService
 from app.infrastructure.redis.client import get_redis
+from app.modules.auth.permissions import PermissionService
 from app.modules.auth.rate_limit import LoginRateLimiter
 from app.modules.auth.repository import (
+    AclRepository,
     RefreshTokenRepository,
     TenantRepository,
     UserRepository,
 )
 from app.modules.auth.service import AuthService
+from app.modules.auth.user_service import AdminUserService
 from app.shared.actor import ActorContext
 
 bearer = HTTPBearer(auto_error=False)
@@ -38,6 +42,18 @@ def get_auth_service(
             settings.login_rate_limit,
             settings.login_rate_window_seconds,
         ),
+    )
+
+
+def get_admin_user_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> AdminUserService:
+    return AdminUserService(
+        session=db,
+        users=UserRepository(db),
+        tenants=TenantRepository(db),
+        permissions=PermissionService(AclRepository(db)),
+        idempotency=IdempotencyService(db),
     )
 
 
