@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://lexpilot:lexpilot@localhost:55432/lexpilot"
     redis_url: str = "redis://localhost:56379/0"
 
-    jwt_secret: str = "dev-only-change-me"
+    jwt_secret: str = "dev-only-change-me-please-use-32-bytes-minimum"
     jwt_algorithm: str = "HS256"
     jwt_active_kid: str = "v1"
     jwt_keys: dict[str, str] = Field(default_factory=dict)
