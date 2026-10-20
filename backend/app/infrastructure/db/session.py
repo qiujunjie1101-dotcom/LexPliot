@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 
+# 数据库会话管理
 settings = get_settings()
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
-
+# 获取数据库会话
 def get_db() -> Generator[Session, None, None]:
     with SessionLocal() as session:
         yield session
